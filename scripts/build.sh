@@ -86,8 +86,8 @@ case "${1:-app}" in
         echo "installed $dest"
         ;;
     dmg)
-        # Ad-hoc signed, not notarized: whoever downloads it opens it once with right-click → Open,
-        # or runs: xattr -dr com.apple.quarantine "/Applications/Rex Island.app"
+        # Ad-hoc signed, not notarized: after downloading, macOS blocks it (or calls it damaged)
+        # until the quarantine flag is cleared: xattr -dr com.apple.quarantine "/Applications/Rex Island.app"
         bundle
         staging="$BUILD/dmg"
         rm -rf "$staging"

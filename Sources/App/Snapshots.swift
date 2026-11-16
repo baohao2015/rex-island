@@ -151,14 +151,14 @@ enum Snapshots {
     }
 
     private static func claudeUsage(now: Date) -> ProviderUsage {
-        ProviderUsage(provider: .claude, plan: nil, windows: [
+        ProviderUsage(provider: .claude, plan: "Pro", windows: [
             LimitWindow(span: .fiveHour, usedPercent: 17, resetsAt: now.addingTimeInterval(28 * 60)),
             LimitWindow(span: .weekly, usedPercent: 4, resetsAt: now.addingTimeInterval(2 * 86400 + 20 * 3600)),
         ], today: TokenTotals(input: 120_000, output: 310_000, cacheRead: 2_600_000, cacheWrite: 180_000))
     }
 
     private static func codexUsage(now: Date) -> ProviderUsage {
-        ProviderUsage(provider: .codex, plan: "plus", windows: [
+        ProviderUsage(provider: .codex, plan: "Plus", windows: [
             LimitWindow(span: .fiveHour, usedPercent: 1, resetsAt: now.addingTimeInterval(4 * 3600 + 12 * 60)),
             LimitWindow(span: .weekly, usedPercent: 89, resetsAt: now.addingTimeInterval(0.11 * 7 * 86400)),
         ], today: TokenTotals(input: 380_000, output: 24_000, cacheRead: 3_400_000, cacheWrite: 0))

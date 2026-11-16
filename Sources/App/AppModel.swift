@@ -56,8 +56,10 @@ final class AppModel: ObservableObject {
     /// Set by the notch controller.
     var onAlert: (Alert) -> Void = { _ in }
     var onTogglePanel: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
     var onResolved: (Resolution) -> Void = { _ in }
 
+    private var claudePlan: String?
     private var rex: RexCLI?
     private var stream: RexEventStream?
     private let server = BridgeServer(path: RIPaths.socket)
@@ -314,6 +316,9 @@ final class AppModel: ObservableObject {
                 return "\(decision.id.prefix(8))  \(decision.agent.displayName)  \(pane?.project ?? "-")  \(DecisionText.summary(decision))"
             }
             reply(["ok": true, "text": lines.isEmpty ? "没有等你处理的请求" : lines.joined(separator: "\n")])
+        case "settings":
+            onOpenSettings()
+            reply(["ok": true, "text": "已打开设置"])
         case "panel":
             onTogglePanel()
             reply(["ok": true, "text": "已切换面板"])
@@ -358,7 +363,7 @@ final class AppModel: ObservableObject {
             resolve(decision.id, .answers(Array(answers)))
             reply(["ok": true, "text": "已回答 \(decision.id.prefix(8))"])
         default:
-            reply(["ok": false, "text": "用法：ctl list | ctl status | ctl panel | ctl decide <id> allow|deny [理由] | ctl answer <id> <答案>…"])
+            reply(["ok": false, "text": "用法：ctl list | ctl status | ctl panel | ctl settings | ctl decide <id> allow|deny [理由] | ctl answer <id> <答案>…"])
         }
     }
 
@@ -368,8 +373,11 @@ final class AppModel: ObservableObject {
         guard !demo else { return }
         let scanner = scanner
         let statusDir = RIPaths.claudeStatusDir
+        let claudeConfig = home.appendingPathComponent(".claude.json")
         usageQueue.async {
             if scanTranscripts { scanner.scan() }
+            // ~/.claude.json can be megabytes; read it with the slow scan only.
+            let plan: String?? = scanTranscripts ? .some((try? Data(contentsOf: claudeConfig)).flatMap(ClaudeAccount.plan(fromConfig:))) : .none
             let sessions = ClaudeSessionStatus.loadAll(in: statusDir)
             let limits = ClaudeSessionStatus.currentLimits(sessions)
             let claudeToday = scanner.claudeToday, codexToday = scanner.codexToday
@@ -381,7 +389,8 @@ final class AppModel: ObservableObject {
                     if byBlock[block].map({ $0.at < session.at }) ?? true { byBlock[block] = session }
                 }
                 if self.claudeSessions != byBlock { self.claudeSessions = byBlock }
-                let claude = ProviderUsage(provider: .claude, plan: nil, windows: limits, today: claudeToday)
+                if case .some(let plan) = plan { self.claudePlan = plan }
+                let claude = ProviderUsage(provider: .claude, plan: self.claudePlan, windows: limits, today: claudeToday)
                 let codex = ProviderUsage(provider: .codex, plan: codexPlan, windows: codexLimits, today: codexToday)
                 if self.claudeUsage != claude { self.claudeUsage = claude }
                 if self.codexUsage != codex { self.codexUsage = codex }

@@ -33,7 +33,20 @@ scripts/build.sh install   # 构建并安装到 ~/Applications，然后启动
 scripts/build.sh dmg       # 打包 .build/Rex-Island-<版本>.dmg，发给别人用
 ```
 
-DMG 只做了 ad-hoc 签名，没有公证。对方第一次打开时要右键选"打开"，或者运行 `xattr -dr com.apple.quarantine "/Applications/Rex Island.app"`。
+### 用 DMG 安装（给同事）
+
+DMG 只做了 ad-hoc 签名，没有经过 Apple 公证。所以从网上下载后，macOS 会拦住它，可能提示"无法打开"甚至"已损坏"（文件本身没有问题）。按下面做一次就好：
+
+1. 打开 DMG，把 Rex Island 拖进"应用程序"。
+2. 在终端运行一次，去掉下载标记：
+   ```sh
+   xattr -dr com.apple.quarantine "/Applications/Rex Island.app"
+   ```
+3. 正常打开 Rex Island，在弹出的设置窗口里按需接入。
+
+如果不想用终端：先双击打开一次（会被拦下），再到"系统设置 → 隐私与安全性"，在页面底部点"仍要打开"。如果提示的是"已损坏"，这个按钮不会出现，只能用上面的命令。
+
+之后更新到新版本，同样需要重复第 2 步。
 
 第一次启动会打开设置窗口，在里面逐项点"接入"：
 
@@ -59,6 +72,7 @@ Rex 服务 ──rex events --all --json──▶ Rex Island ◀──Unix socke
 - **决策内容来自 hook**。`PermissionRequest` hook 会一直挂着，直到你在刘海里回答，回答会作为 hook 的输出交给 agent。
 - **在终端里先回答了怎么办**：Claude Code 不会结束还在等待的 hook，所以 Rex Island 以 Rex 的状态为准：面板一离开 `blocked`（或者换成了另一个提示），对应的卡片就作废，挂着的 hook 也会被关掉。
 - **计划批准走按键**：Claude Code（2.1.325 实测）收到 hook 对 `ExitPlanMode` 的 allow 后，并不会收起计划对话框。所以"批准计划"是在 Rex 面板里按下对应的菜单项：先确认 Rex 仍显示 `approve plan`，再从屏幕上读出选项编号，按下后确认面板已经继续；任何一步不对，就改为跳到 Rex 让你自己处理。"提修改意见"仍然走 hook。
+- **套餐**：Claude 的套餐（Pro、Max 5x……）读自 `~/.claude.json` 里 `oauthAccount.organizationType`，这只是 Claude Code 缓存的账户资料，不是登录凭证。Codex 的套餐读自它日志里的 `plan_type`。
 - **额度**：Claude 的数据来自状态栏包装命令写下的 `~/Library/Application Support/RexIsland/claude-status/<session>.json`。Codex 的数据来自 `~/.codex/sessions/**/rollout-*.jsonl` 里最新的 `rate_limits`。今天的 token 数从两边的本地转录文件增量统计，不发任何网络请求，也不读取任何登录凭证。
 
 命令行（脚本或排查问题时用）：
@@ -103,6 +117,6 @@ B="$HOME/Library/Application Support/RexIsland/bin/rexisland-bridge"
 | CodeIsland | DMG | GitHub Releases + 自己的 Homebrew tap（`brew install --cask codeisland`） | Developer ID 签名并公证 | Sparkle |
 | Pip | zip | GitHub Releases + 自己的 Homebrew tap | ad-hoc，没有公证（cask 安装时会去掉隔离属性） | 每天检查一次新版本并提示 |
 
-Rex Island 目前只给自己和少数人用：`scripts/build.sh dmg` 打出 DMG，放到这个私有仓库的 GitHub Releases 里即可（下载的人需要有仓库权限）。要公开发布时再补三件事：Apple Developer ID 签名和公证（需要 Apple 开发者账号），一个 Homebrew tap，以及 Sparkle 自动更新。
+Rex Island 现在的做法：`scripts/build.sh dmg` 打出 DMG，放到 GitHub Releases，按上面"用 DMG 安装"的步骤安装。之后如果要让安装更顺滑，再补三件事：Apple Developer ID 签名和公证（需要 Apple 开发者账号，做完后就不用 `xattr` 了），一个 Homebrew tap，以及 Sparkle 自动更新。
 
 致谢见 [NOTICE.md](NOTICE.md)：窗口、眼睛和额度的读取方式参考了 [Pip](https://github.com/Kikatsu/pip-notch)，问答回传的格式参考了 [CodeIsland](https://github.com/wxtsky/CodeIsland)，Rex 状态协议的用法参考了 [Rex Radar](https://github.com/hecspc/rex-radar) 和 [rex-inbox](https://github.com/captjt/rex-inbox)。

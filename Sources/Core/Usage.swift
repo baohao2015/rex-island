@@ -107,10 +107,34 @@ struct ClaudeSessionStatus: Equatable {
         }
     }
 
-    /// Plan limits are account-wide: the newest report wins, with windows that reset since shown as fresh.
+    /// Plan limits are account-wide, so each window takes the newest report that has it: Claude Code
+    /// leaves a window out of some reports (e.g. a session that hasn't sent a request in the current
+    /// 5-hour window). Windows that reset since read as fresh.
     static func currentLimits(_ sessions: [ClaudeSessionStatus], now: Date = Date()) -> [LimitWindow] {
-        let newest = sessions.filter { !$0.limits.isEmpty }.max { $0.at < $1.at }
-        return (newest?.limits ?? []).map { $0.current(now: now) }
+        var newest: [LimitWindow.Span: (at: Date, window: LimitWindow)] = [:]
+        for session in sessions {
+            for window in session.limits where newest[window.span].map({ $0.at < session.at }) ?? true {
+                newest[window.span] = (session.at, window)
+            }
+        }
+        return [LimitWindow.Span.fiveHour, .weekly].compactMap { newest[$0]?.window.current(now: now) }
+    }
+}
+
+/// The Claude plan, from the account Claude Code caches in `~/.claude.json` (not the login itself).
+enum ClaudeAccount {
+    /// "Pro", "Max 5x", "Max 20x", "Team", "Enterprise"…; nil when unknown.
+    static func plan(fromConfig data: Data) -> String? {
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let account = object["oauthAccount"] as? [String: Any],
+              let type = RexParse.nonEmpty(account["organizationType"] as? String) else { return nil }
+        let name = type.hasPrefix("claude_") ? String(type.dropFirst("claude_".count)) : type
+        guard !name.isEmpty else { return nil }
+        let tier = (account["organizationRateLimitTier"] as? String ?? "") + " " + (account["userRateLimitTier"] as? String ?? "")
+        if name == "max", let multiple = ["20x", "5x"].first(where: { tier.contains("max_\($0)") }) {
+            return "Max \(multiple)"
+        }
+        return name.prefix(1).uppercased() + name.dropFirst()
     }
 }
 
@@ -194,7 +218,7 @@ final class UsageScanner: @unchecked Sendable {
             let windows = Self.codexLimits(limits)
             if !windows.isEmpty {
                 codexLimits = windows
-                codexPlan = limits["plan_type"] as? String
+                codexPlan = (limits["plan_type"] as? String).flatMap(RexParse.nonEmpty).map { $0.prefix(1).uppercased() + $0.dropFirst() }
                 codexLimitsAt = date
             }
         }

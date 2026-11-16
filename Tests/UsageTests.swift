@@ -27,6 +27,23 @@ func usageTests() {
     equal(afterReset.first?.resetsAt, nil)
     equal(afterReset.last?.usedPercent, 4)
 
+    // A newer report without the 5h window doesn't hide it: each window takes its own newest report.
+    let weeklyOnly = ClaudeSessionStatus(sessionID: "c", block: nil, at: Date(timeIntervalSince1970: 1_794_833_500), model: nil, contextPercent: nil, costUSD: nil,
+                                         limits: [LimitWindow(span: .weekly, usedPercent: 5, resetsAt: Date(timeIntervalSince1970: 1_795_080_000))])
+    let merged = ClaudeSessionStatus.currentLimits([snapshot!, weeklyOnly], now: now)
+    equal(merged.map(\.span), [.fiveHour, .weekly])
+    equal(merged.map(\.usedPercent), [17, 5], "5h from the older report, weekly from the newer one")
+
+    // Plan names from ~/.claude.json.
+    func plan(_ account: String) -> String? { ClaudeAccount.plan(fromConfig: Data(#"{"oauthAccount":\#(account)}"#.utf8)) }
+    equal(plan(#"{"organizationType":"claude_pro","organizationRateLimitTier":"default_claude_ai"}"#), "Pro")
+    equal(plan(#"{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}"#), "Max 20x")
+    equal(plan(#"{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}"#), "Max 5x")
+    equal(plan(#"{"organizationType":"claude_max"}"#), "Max")
+    equal(plan(#"{"organizationType":"claude_enterprise"}"#), "Enterprise")
+    equal(plan(#"{"organizationType":""}"#), nil)
+    equal(ClaudeAccount.plan(fromConfig: Data(#"{"projects":{}}"#.utf8)), nil)
+
     // Pace: 89% used with 86.5% of the week gone runs 2.5 points ahead.
     let week = LimitWindow(span: .weekly, usedPercent: 89, resetsAt: now.addingTimeInterval(0.135 * 7 * 86400))
     check(abs((week.pace(now: now) ?? 0) - 0.025) < 0.001)
@@ -65,7 +82,7 @@ func usageTests() {
     equal(scanner.codexToday, TokenTotals(input: 100, output: 50, cacheRead: 400, cacheWrite: 0), "only today's increase; a repeated total adds nothing")
     equal(scanner.codexLimits.map(\.span), [.fiveHour, .weekly])
     equal(scanner.codexLimits.last?.usedPercent, 89)
-    equal(scanner.codexPlan, "plus")
+    equal(scanner.codexPlan, "Plus")
 
     // Appended lines are read once; a half-written line waits for the next scan.
     append(#"{"type":"assistant","timestamp":"2026-11-16T11:00:00+08:00","requestId":"r2","message":{"id":"m2","usage":{"input_tokens":1,"output_tokens":2}}}"#, to: transcript)

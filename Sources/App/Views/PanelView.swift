@@ -322,7 +322,7 @@ struct UsageFooter: View {
                 AgentBadge(agent: agent, size: 16)
                 Text(agent == .claude ? "Claude" : "Codex").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Theme.primary)
                 if let plan = usage?.plan {
-                    Text(plan.capitalized).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.tertiary)
+                    Text(plan).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.tertiary)
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(RoundedRectangle(cornerRadius: 3).stroke(Theme.hairline))
                 }

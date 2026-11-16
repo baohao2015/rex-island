@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.notch = notch
         model.onAlert = { [weak notch] alert in notch?.present(alert) }
         model.onTogglePanel = { [weak notch] in notch?.toggle() }
+        model.onOpenSettings = { settings.show() }
         model.onResolved = { [weak notch] resolution in
             switch resolution {
             case .deny, .revisePlan: notch?.state.face.react(.deny)

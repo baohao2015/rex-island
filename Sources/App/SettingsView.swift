@@ -23,11 +23,9 @@ struct SettingsView: View {
                 if let error = status.lastError {
                     Text(error).font(.callout).foregroundStyle(.red)
                 }
+                Note(text: "只增删 Rex Island 自己的条目。每个文件第一次被改动前，会在旁边留一份 .rexisland-backup。")
             } header: {
                 Text("接入")
-            } footer: {
-                Text("每个文件第一次被改动前，会在旁边留一份 .rexisland-backup。只增删 Rex Island 自己的条目。")
-                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Rex") {
@@ -39,11 +37,18 @@ struct SettingsView: View {
                 Toggle("登录时启动", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in setLaunchAtLogin(on) }
                 if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
-                LabeledContent("快捷键") {
-                    Text("⌃⌥N 打开或收起面板。面板里：⏎ 允许/提交，⌘⌫ 拒绝，1–9 选选项，↑↓ 切换请求，Esc 收起")
-                        .multilineTextAlignment(.trailing)
-                        .foregroundStyle(.secondary)
-                }
+            }
+
+            Section {
+                ShortcutRow(title: "打开或收起面板（任何地方）", keys: ["⌃", "⌥", "N"])
+                ShortcutRow(title: "允许 / 提交回答 / 批准计划", keys: ["⏎"])
+                ShortcutRow(title: "拒绝", keys: ["⌘", "⌫"])
+                ShortcutRow(title: "选择第几个选项", keys: ["1", "–", "9"])
+                ShortcutRow(title: "切换请求", keys: ["↑", "↓"])
+                ShortcutRow(title: "收起面板", keys: ["Esc"])
+                Note(text: "除第一项外，其余快捷键只在用快捷键或点击打开面板后才生效，不会抢走你在别的应用里的输入。")
+            } header: {
+                Text("快捷键")
             }
         }
         .formStyle(.grouped)
@@ -72,6 +77,43 @@ struct SettingsView: View {
     }
 }
 
+/// A gray explanatory line inside a section. (A Form footer wraps at half width and centers its lines.)
+private struct Note: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct ShortcutRow: View {
+    let title: String
+    let keys: [String]
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 3) {
+                ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                    if key == "–" {
+                        Text("–").foregroundStyle(.secondary)
+                    } else {
+                        Text(key)
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                            .frame(minWidth: 20, minHeight: 20)
+                            .padding(.horizontal, key.count > 1 ? 4 : 0)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.07)))
+                            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.primary.opacity(0.12)))
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct IntegrationRow: View {
     let title: String
     let detail: String
@@ -91,9 +133,10 @@ private struct IntegrationRow: View {
                         Text("未安装").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
             Button(connected ? "断开" : "接入") { set(!connected) }
                 .disabled(!present && !connected)
         }
@@ -123,5 +166,7 @@ final class SettingsWindowController {
         }
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
+        // An accessory app isn't always granted activation; still put the window in front.
+        window?.orderFrontRegardless()
     }
 }
