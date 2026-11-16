@@ -34,6 +34,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var claudeSessions: [String: ClaudeSessionStatus] = [:]
     @Published private(set) var rexHealth = RexHealth.connecting
     @Published private(set) var integrations = IntegrationStatus()
+    /// The last jump to a pane failed because Rex's Remote Control is off.
+    @Published var revealNeedsRemoteControl = false
 
     struct LimitWarning: Equatable {
         var provider: AgentKind
@@ -267,16 +269,17 @@ final class AppModel: ObservableObject {
                 connections.removeValue(forKey: decision.id)?.cancel()
                 onResolved(.approvePlan(autoAccept: autoAccept))
             } else {
-                answerInTerminal(decision.id)
+                await answerInTerminal(decision.id)
             }
         }
     }
 
-    /// Lets the agent ask in the terminal instead, and shows that pane.
-    func answerInTerminal(_ id: String) {
-        guard let decision = board.removeDecision(id) else { return }
+    /// Lets the agent ask in the terminal instead, and shows that pane. True if Rex now shows it.
+    @discardableResult
+    func answerInTerminal(_ id: String) async -> Bool {
+        guard let decision = board.removeDecision(id) else { return false }
         connections.removeValue(forKey: id)?.cancel()
-        reveal(block: decision.blockID)
+        return await reveal(block: decision.blockID)
     }
 
     private func retire(_ ids: [String]) {
@@ -301,9 +304,23 @@ final class AppModel: ObservableObject {
         onAlert(alert)
     }
 
-    func reveal(block: String) {
-        guard let rex, let pane = board.panes[block] else { return }
-        Task { await rex.reveal(session: pane.sessionID, block: pane.id, window: pane.windowID) }
+    /// Switches the Rex app to a pane. True if it did; false leaves the panel open to explain why.
+    func reveal(block: String) async -> Bool {
+        guard let rex, let pane = board.panes[block] else { return false }
+        switch await rex.reveal(session: pane.sessionID, block: pane.id, window: pane.windowID) {
+        case .shown:
+            revealNeedsRemoteControl = false
+            return true
+        case .needsRemoteControl:
+            revealNeedsRemoteControl = true
+            return false
+        case .noApp:
+            return false
+        }
+    }
+
+    func openRexServerSettings() {
+        NSWorkspace.shared.open(RexCLI.serverSettingsURL)
     }
 
     // MARK: Control (`rexisland-bridge ctl`)
@@ -316,6 +333,18 @@ final class AppModel: ObservableObject {
                 return "\(decision.id.prefix(8))  \(decision.agent.displayName)  \(pane?.project ?? "-")  \(DecisionText.summary(decision))"
             }
             reply(["ok": true, "text": lines.isEmpty ? "没有等你处理的请求" : lines.joined(separator: "\n")])
+        case "open" where args.count >= 2:
+            // Same path as clicking a row: rexisland-bridge ctl open <block id or its end>
+            let matches = board.agentPanes.filter { $0.id.hasSuffix(args[1]) || $0.id.hasPrefix(args[1]) }
+            guard matches.count == 1, let pane = matches.first else {
+                reply(["ok": false, "text": matches.isEmpty ? "找不到面板 \(args[1])" : "\(args[1]) 匹配多个面板"])
+                return
+            }
+            Task {
+                let shown = await reveal(block: pane.id)
+                if !shown, revealNeedsRemoteControl { onTogglePanel() }
+                reply(["ok": shown, "text": shown ? "已在 Rex 里打开 \(PaneText.title(pane))" : revealNeedsRemoteControl ? "Rex 没打开 Remote Control" : "没有找到 Rex App"])
+            }
         case "settings":
             onOpenSettings()
             reply(["ok": true, "text": "已打开设置"])
@@ -363,7 +392,7 @@ final class AppModel: ObservableObject {
             resolve(decision.id, .answers(Array(answers)))
             reply(["ok": true, "text": "已回答 \(decision.id.prefix(8))"])
         default:
-            reply(["ok": false, "text": "用法：ctl list | ctl status | ctl panel | ctl settings | ctl decide <id> allow|deny [理由] | ctl answer <id> <答案>…"])
+            reply(["ok": false, "text": "用法：ctl list | ctl status | ctl open <面板> | ctl panel | ctl settings | ctl decide <id> allow|deny [理由] | ctl answer <id> <答案>…"])
         }
     }
 

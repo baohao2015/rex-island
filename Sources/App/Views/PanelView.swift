@@ -107,6 +107,12 @@ struct PanelView: View {
 
     @ViewBuilder private var banners: some View {
         let status = model.integrations
+        if model.revealNeedsRemoteControl {
+            Banner(symbol: "arrow.up.forward.app.fill", tint: Theme.amber, title: "要跳到对应的标签页，需要打开 Rex 的 Remote Control",
+                   detail: "Rex 只允许开启了 Remote Control 的程序切换它正在显示的标签页。在 Rex 设置的 Rex Server 页面打开即可，只需一次。",
+                   button: "打开 Rex 设置", action: { model.openRexServerSettings() },
+                   onDismiss: { model.revealNeedsRemoteControl = false })
+        }
         if case .missing = model.rexHealth {
             Banner(symbol: "exclamationmark.triangle.fill", tint: Theme.amber, title: "找不到 rex 命令",
                    detail: "装好 Rex 后重开 Rex Island。", button: nil, action: {})

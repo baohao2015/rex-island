@@ -30,6 +30,22 @@ struct SettingsView: View {
 
             Section("Rex") {
                 LabeledContent("状态") { Text(rexText) }
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("点会话跳转到 Rex").font(.body.weight(.medium))
+                            if model.revealNeedsRemoteControl {
+                                Text("Remote Control 未打开").font(.caption).foregroundStyle(.orange)
+                            }
+                        }
+                        Text("需要在 Rex 设置的 Rex Server 页面打开 Remote Control，Rex Island 才能把 Rex 切到对应的标签页。")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button("打开 Rex 设置") { model.openRexServerSettings() }
+                }
+                .padding(.vertical, 2)
             }
 
             Section("通用") {

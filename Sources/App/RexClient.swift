@@ -32,8 +32,20 @@ final class RexCLI {
         return path.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
     }
 
+    struct Output {
+        var status: Int32
+        var stdout: Data
+        var stderr: String
+    }
+
     /// Runs `rex ARGS`; stdout on exit status 0, nil otherwise or after `timeout`.
     func run(_ args: [String], timeout: TimeInterval = 8) async -> Data? {
+        guard let output = await execute(args, timeout: timeout), output.status == 0 else { return nil }
+        return output.stdout
+    }
+
+    /// Runs `rex ARGS` and keeps its exit status and error text. Nil if it couldn't start.
+    func execute(_ args: [String], timeout: TimeInterval = 8) async -> Output? {
         let executable = executable
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -44,9 +56,9 @@ final class RexCLI {
                 // Never inherit a pane's identity from the shell that launched the app.
                 for key in ["REX_SESSION", "REX_BLOCK", "REX_CLIENT"] { environment[key] = nil }
                 process.environment = environment
-                let out = Pipe()
+                let out = Pipe(), err = Pipe()
                 process.standardOutput = out
-                process.standardError = FileHandle.nullDevice
+                process.standardError = err
                 process.standardInput = FileHandle.nullDevice
                 do { try process.run() } catch {
                     continuation.resume(returning: nil)
@@ -54,12 +66,26 @@ final class RexCLI {
                 }
                 let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
                 DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
+                // Drain stderr on its own thread so a full pipe can never stall stdout.
+                let errors = ErrorText()
+                let drained = DispatchGroup()
+                drained.enter()
+                DispatchQueue.global().async {
+                    errors.data = err.fileHandleForReading.readDataToEndOfFile()
+                    drained.leave()
+                }
                 let data = out.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
+                drained.wait()
                 watchdog.cancel()
-                continuation.resume(returning: process.terminationStatus == 0 ? data : nil)
+                continuation.resume(returning: Output(status: process.terminationStatus, stdout: data,
+                                                      stderr: String(decoding: errors.data, as: UTF8.self)))
             }
         }
+    }
+
+    private final class ErrorText: @unchecked Sendable {
+        var data = Data()
     }
 
     func call(_ method: String, session: String, params: [String: Any] = [:]) async -> Data? {
@@ -134,18 +160,32 @@ final class RexCLI {
 
     // MARK: Navigation
 
-    /// Shows a pane in the Rex app on this Mac: focuses it in its session, switches the app to that session.
-    func reveal(session: String, block: String, window: String?) async {
+    enum RevealOutcome {
+        case shown
+        /// The Rex app refuses actions from other programs until Remote Control is on in its settings.
+        case needsRemoteControl
+        /// No Rex app is connected on this Mac.
+        case noApp
+    }
+
+    /// Shows a pane in the Rex app on this Mac. Focusing the pane only changes the server's view; which
+    /// tab the app shows is the app's own state, so the app is asked to select that session and tab.
+    func reveal(session: String, block: String, window: String?) async -> RevealOutcome {
         _ = await call("session.focus_block", session: session, params: ["session_id": session, "block_id": block])
-        if let client = await localAppClient() {
-            var args = ["-C", client, "do", "session.select", "session_id=\(session)"]
-            if let window { args.append("window_id=\(window)") }
-            _ = await run(args)
+        guard let client = await localAppClient() else { return .noApp }
+        var args = ["-C", client, "do", "session.select", "session_id=\(session)"]
+        if let window { args.append("window_id=\(window)") }
+        if let output = await execute(args), output.status != 0, output.stderr.contains("not accepting actions") {
+            return .needsRemoteControl
         }
         _ = await MainActor.run {
             NSRunningApplication.runningApplications(withBundleIdentifier: RexCLI.appBundleID).first?.activate()
         }
+        return .shown
     }
+
+    /// Rex's settings page with the Remote Control switch.
+    static let serverSettingsURL = URL(string: "rex://settings/server")!
 
     /// Presses a numbered menu option in a pane, only if Rex says the pane is blocked on a prompt whose
     /// message mentions `subject` and the screen shows the option. True once the pane has moved on.

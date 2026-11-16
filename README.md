@@ -81,6 +81,7 @@ Rex 服务 ──rex events --all --json──▶ Rex Island ◀──Unix socke
 B="$HOME/Library/Application Support/RexIsland/bin/rexisland-bridge"
 "$B" ctl status                      # 各面板状态和额度
 "$B" ctl list                        # 等你处理的请求
+"$B" ctl open <面板 ID 的末尾几位>      # 在 Rex 里打开那个面板（和点击会话行一样）
 "$B" ctl decide <id> allow|deny [理由]
 "$B" ctl answer <id> "答案1" "选项a, 选项b"
 ```
@@ -103,7 +104,7 @@ B="$HOME/Library/Application Support/RexIsland/bin/rexisland-bridge"
 
 - 只支持 Rex 里的 Claude Code 和 Codex，并且只处理本机的 Rex 服务（不含 `rex hosts` 上的其他机器）。
 - Codex 只能审批。它的提问和计划只会显示为"等你"，需要到 Rex 里处理（Codex 的 hook 不接受 `updatedInput`）。
-- 跳转使用 `session.focus_block` 加 App 的 `session.select`。如果同一台 Mac 上连着多个 Rex App 客户端，会选择最后连上的那个。
+- 点会话跳转需要在 Rex 设置的 Rex Server 页面打开 **Remote Control**：Rex 显示哪个标签页是 App 自己的状态，只有开启了 Remote Control，外部程序才能切换它（Rex Radar 也有同样的要求）。没开时，面板顶部会提示，并给出"打开 Rex 设置"按钮。如果同一台 Mac 上连着多个 Rex App 客户端，会选择最后连上的那个。
 - "你正看着这个面板就不提醒"只能判断面板是否是其所在会话当前标签页的焦点，无法知道 Rex App 当前显示的是哪个会话。
 - agent 在干活时，眼睛和转圈动画会让 CPU 占用保持在 5% 左右。
 - 没有签名公证，见下面的"分发"。

@@ -40,8 +40,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var notchRef: NotchController?
         let actions = NotchActions(
             resolve: { [weak self] id, resolution in self?.model.resolve(id, resolution) },
-            answerInTerminal: { [weak self] id in self?.model.answerInTerminal(id); notchRef?.close() },
-            reveal: { [weak self] block in self?.model.reveal(block: block); notchRef?.close() },
+            // Close only once Rex shows the pane; otherwise the panel stays open to say why it didn't.
+            answerInTerminal: { [weak self] id in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if await self.model.answerInTerminal(id) { notchRef?.close() } else if self.model.revealNeedsRemoteControl { notchRef?.open() }
+                }
+            },
+            reveal: { [weak self] block in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if await self.model.reveal(block: block) { notchRef?.close() } else if self.model.revealNeedsRemoteControl { notchRef?.open() }
+                }
+            },
             openSettings: { notchRef?.close(); settings.show() },
             openPanel: { notchRef?.open() },
             close: { notchRef?.close() }
